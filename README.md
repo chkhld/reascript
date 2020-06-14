@@ -1,5 +1,5 @@
 # reascript
-A free collection of ReaScript for [Reaper](https://www.reaper.fm/).
+A free collection of scripts for use in [Reaper](https://www.reaper.fm/).
 
 See the source files for details and instructions.
 
