@@ -1,5 +1,7 @@
 //
-// SRT GENERATOR
+// TRACK TO SRT
+//
+// Generates SRT subtitles from a track with text items.
 //
 // Create a track, insert a number of empty media items
 // on it. Fill each media item with some text, sync the
@@ -8,7 +10,7 @@
 // Select the track with the text items on it, then run
 // this script. This will cycle through all media items
 // on the track and convert their position, length, and
-// contained text to SRT caption entries.
+// contained text to SRT captions.
 //
 // The generated SRT output is printed to the ReaScript
 // console window. Copy it over into a simple text file
