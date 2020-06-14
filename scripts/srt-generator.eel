@@ -1,0 +1,307 @@
+//
+// SRT GENERATOR
+//
+// Create a track, insert a number of empty media items
+// on it. Fill each media item with some text, sync the
+// media items to your video on the Reaper timeline.
+//
+// Select the track with the text items on it, then run
+// this script. This will cycle through all media items
+// on the track and convert their position, length, and
+// contained text to SRT caption entries.
+//
+// The generated SRT output is printed to the ReaScript
+// console window. Copy it over into a simple text file
+// with file extension ".srt" and save it. Done.
+//
+// If media items on the selected track are muted, they
+// will be skipped and not converted to SRT captions.
+//
+// IMPORTANT: This script will sync frames according to
+// the project FPS property. Ensure it's set correctly!
+//
+// author: chokehold
+// url:    https://github.com/chkhld/reascript/
+//
+
+// Memory offsets for various variables
+srtContent = 10; // Full SRT output file text
+itemText   = 11; // Extracted media item note text
+
+// Clear console window text
+ShowConsoleMsg("");
+
+// Searches a Needle char in a Haystack string.
+// Returns position [0...] if found, returns -1 if not found.
+// Returned offset is relative to left/beginning of string!
+function charFindFirst (Haystack, Needle) local (length, result, char, offset)
+(
+  // String size
+  length = strlen(Haystack);
+  //
+  // Index at which Needle char was found in Haystack
+  result = -1; // -1 means "not found"
+  //
+  // Only proceed if Haystack and Needle contain text
+  (length > 0 && strlen(Needle) > 0) ?
+  (
+    // Make sure only one (=first) Needle char is compared
+    char = str_getchar(Needle, 0);
+    //
+    // Reset offset in string (=first char to inspect)
+    offset = 0;
+    //
+    // Cycle through the string from the beginning
+    while (offset < length)
+    (
+      // If current Haystack char matches Needle
+      (str_getchar(Haystack, offset) == char) ?
+      (
+        // Update result variable with current offset
+        result = offset;
+        //
+        // Break loop
+        offset = length;
+      );
+      //
+      // Increment offset (=move 1 char right next cycle)
+      offset += 1;
+    );
+  );
+  //
+  // Return found result (index on success, -1 otherwise)
+  result;
+);
+
+// Searches a Needle char from the back of a Haystack string.
+// Returns position [0...] if found, returns -1 if not found.
+// Returned offset is relative to left/beginning of string!
+function charFindLast (Haystack, Needle) local (length, result, char, offset)
+(
+  // String size
+  length = strlen(Haystack);
+  //
+  // Index at which Needle char was found in Haystack
+  result = -1; // -1 means "not found"
+  //
+  // Only proceed if Haystack and Needle contain text
+  (length > 0 && strlen(Needle) > 0) ?
+  (
+    // Make sure only one (=first) Needle char is compared
+    char = str_getchar(Needle, 0);
+    //
+    // Reset offset in string (=first char to inspect, plus 1)
+    offset = length;
+    //
+    // Cycle through the string from the back
+    while (offset > 0)
+    (
+      // Decrement offset (=move 1 char left next cycle)
+      offset -= 1;
+      //
+      // If current Haystack char matches Needle
+      (str_getchar(Haystack, offset) == char) ?
+      (
+        // Update result variable with current offset
+        result = offset;
+        //
+        // Break loop
+        offset = 0;
+      );
+    );
+  );
+  //
+  // Return found result (index on success, -1 otherwise)
+  result;
+);
+
+// Turns frames to milliseconds relative to project video FPS
+function framesToMS (Frames) local (fps, fpsOffset, msValue)
+(
+  // Get project video FPS
+  fps = TimeMap_curFrameRate(0);
+  //
+  // Turn Frames into a number
+  match("%d", Frames, Frames);
+  //
+  // Relative FPS offset in the second [0...1]
+  fpsOffset = Frames / fps;
+  //
+  // Conver to milliseconds offset in the second [0...1000]
+  // Using floor instead of round/ceil to stay <= 1000ms
+  msValue = floor(fpsOffset * 1000);
+  //
+  // Turn msValue into String
+  sprintf(msValue, "%d", msValue);
+  //
+  // Return milliseconds string
+  msValue;
+);
+
+// Formats a "H?:MM:SS:F?" position to "HH:MM:SS,XXX" timestamp
+function formatTimestamp (Timestamp) local ()
+(
+  // Split off :FF frames from End
+  // Find position of last : char (separates :F? frames)
+  framesPos = charFindLast(Timestamp, ":");
+  //
+  // Copy :F? frames value into its own container
+  strcpy_from(frames, Timestamp, framesPos);
+  //
+  // Trim : away off the beginning of the :F? frames string
+  str_delsub(frames, 0, 1);
+  //
+  // Trim :F? away off the end of the Timestamp string
+  str_delsub(Timestamp, framesPos, strlen(frames)+1);
+  //
+  // Turn the frames value into milliseconds
+  framesMS = framesToMS(frames);
+  //
+  // Find position of first : char (separates H?: hours)
+  hoursPos = charFindFirst(Timestamp, ":");
+  //
+  // While fewer H chars than required two
+  while (hoursPos < 2)
+  (
+    // Add another zero to the front of the timestamp
+    str_insert(Timestamp, "0", 0);
+    //
+    // Update position of first found ":" char
+    hoursPos = charFindFirst(Timestamp, ":");
+  );
+  //
+  // Concatenate timestamp with milliseconds value
+  strcat(Timestamp, ",");
+  strcat(Timestamp, framesMS);
+  //
+  // Return the formatted timestamp
+  Timestamp;
+);
+
+//
+// --------------------------------------------------------------
+// -------------------- PROCESS BEGINS BELOW --------------------
+// --------------------------------------------------------------
+//
+
+// If no tracks are currently selected
+(CountSelectedTracks() == 0) ?
+(
+  // Print error message to console
+  ShowConsoleMsg("SRT generation error: no track selected");
+):
+// Else if 1+ tracks are currently selected
+(
+  // Get pointer to first selected track
+  selectedTrack = GetSelectedTrack(0, 0);
+  //
+  // Figure out if selected track is muted
+  selectedTrackIsMuted = GetMediaTrackInfo_Value(selectedTrack, "B_MUTE");
+  //
+  // If selected track is NOT muted
+  !selectedTrackIsMuted ?
+  (
+    // Reset content of SRT output to empty string
+    str_setlen(srtContent, 0);
+    //
+    // Count media items on selected track
+    numMediaItems = CountTrackMediaItems(selectedTrack);
+    //
+    // Reset SRT entry index counter for this track
+    srtIndex = 0;
+    // 
+    // Counter variable for loop below
+    currentMediaItem = 0;
+    //
+    // Cycle through all media items on selected track
+    while (currentMediaItem < numMediaItems)
+    ( 
+      // Get pointer to currently looped media item
+      loopedItem = GetTrackMediaItem(selectedTrack, currentMediaItem);
+      //
+      // Figure out if this media item is muted
+      isMuted = GetMediaItemInfo_Value(loopedItem, "B_MUTE");
+      //
+      // Fetch looped item text
+      GetSetMediaItemInfo_String(loopedItem, "P_NOTES", itemText, 0);
+      //
+      // Figure out if looped item is emtpy (i.e. contains no text)
+      isEmpty = (itemText == "");
+      //
+      (!isMuted && !isEmpty) ?
+      (
+        // Increment caption index counter
+        srtIndex += 1;
+        //
+        // Turn SRT caption index into string
+        sprintf(#srtIndexString, "%d", srtIndex);
+        //
+        // Write current caption index to SRT output
+        strcat(srtContent, #srtIndexString);
+        strcat(srtContent, "\n");
+        //
+        // Get item start time in seconds
+        startSeconds = GetMediaItemInfo_Value(loopedItem, "D_POSITION");
+        //
+        // Turn start time into string
+        format_timestr_pos(startSeconds, #timestampStart, 5);
+        //
+        // Format start timestamp to HH:MM:SS,XXX
+        #timestampStart = formatTimestamp(#timestampStart);
+        //
+        // Write start timestamp to SRT output
+        strcat(srtContent, #timestampStart);
+        //
+        // Write "until" arrow to SRT output
+        strcat(srtContent, " --> ");
+        //
+        // Get item length in seconds
+        lengthSeconds = GetMediaItemInfo_Value(loopedItem, "D_LENGTH");
+        //
+        // Add start+length to get end time
+        endSeconds = startSeconds + lengthSeconds;
+        //
+        // Turn end time into string
+        format_timestr_pos(endSeconds, #timestampEnd, 5);
+        //
+        // Format end timestamp to HH:MM::SS,XXX
+        #timestampEnd = formatTimestamp(#timestampEnd);
+        //
+        // Write end timestamp to SRT output
+        strcat(srtContent, #timestampEnd);
+        strcat(srtContent, "\n");
+        //
+        // Write media item text to SRT output
+        strcat(srtContent, itemText);
+        //
+        // Write caption spacer to SRT output
+        strcat(srtContent, "\n\n");
+      );
+      //
+      // Increment counter
+      currentMediaItem += 1;
+    );
+  );
+  //
+  // If no media items were converted to captions
+  // (SRT index is still at initial value)
+  (srtIndex == 0) ?
+  (
+    // Print error message into console window
+    ShowConsoleMsg("SRT generation error: no (un-muted) items to convert.\n");
+  ):
+  // Else if 1+ items were converted to captions
+  // (SRT index is greater than initial value)
+  (
+    // If text was written into SRT string container
+    // (This should always be TRUE at this point!)
+    (srtContent != "") ?
+    (
+      // Trim off the last new-line character (leaves one)
+      str_setlen(srtContent, strlen(srtContent)-1);
+    );
+    //
+    // Output generated SRT content to ReaScript Console
+    ShowConsoleMsg(srtContent);
+  );
+);
