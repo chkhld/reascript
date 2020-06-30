@@ -4,6 +4,7 @@ A free collection of scripts for use in [Reaper](https://www.reaper.fm/).
 See the source files for details and instructions.
 
 ## Included Scripts
+- [Select MIDI items on selected tracks](https://github.com/chkhld/reascript/blob/master/scripts/select-track-midi-items.eel): Adds all media items with active MIDI takes on all selected tracks to current media item selection
 - [Track to SRT](https://github.com/chkhld/reascript/blob/master/scripts/track-to-srt.eel): Run this on a selected track to convert its text items to SRT subtitle data for your videos
 
 _(There may be more in the future)_
