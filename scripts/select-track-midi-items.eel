@@ -1,0 +1,66 @@
+// 
+// SELECT MIDI ITEMS ON SELECTED TRACKS
+//
+// Cycles through all the media items on all selected tracks, and
+// adds them to the current media item selection, if their source
+// is of type MIDI.
+//
+// Media items can contain several takes of different types, like
+// audio, MIDI, click source, etc. This script will respect every
+// media item's active take, only media items with an active take
+// of type MIDI will actually be selected.
+// 
+// This will not deselect currently selected media items when run,
+// but adds newly selected items to the already present selection.
+//
+// author: chokehold
+// url:    https://github.com/chkhld/reascript/
+//
+// --------------------------------------------------------------
+// -------------------- PROCESS BEGINS BELOW --------------------
+// --------------------------------------------------------------
+//
+// Count selected tracks
+numSelectedTracks = CountSelectedTracks(0);
+
+// Cycle through selected tracks
+trackIndex = 0;
+while (trackIndex < numSelectedTracks)
+(
+  // Get pointer to next track in selection queue,
+  // Ignores Master because can't have MIDI items
+  thisTrack = GetSelectedTrack(0, trackIndex);
+  
+  // Count media items on this track
+  numMediaItems = CountTrackMediaItems(thisTrack);
+  
+  // Cycle through all media items on this track
+  itemIndex = 0;
+  while (itemIndex < numMediaItems)
+  (
+    // Get pointer to next media item on track
+    thisItem = GetTrackMediaItem(thisTrack, itemIndex);
+    
+    // Get the index of the active take in this media item
+    itemTake = GetMediaItemInfo_Value(thisItem, "I_CURTAKE");
+    
+    // Get pointer to active take in this media item
+    thisTake = GetMediaItemTake(thisItem, itemTake);
+    
+    // If the current take in this item is MIDI
+    TakeIsMIDI(thisTake) ? 
+    (
+      // Add this media item to the current selection
+      SetMediaItemSelected(thisItem, 1);
+      
+      // Required to make altered selection state visible
+      UpdateItemInProject(thisItem);
+    );
+    
+    // Increment item index
+    itemIndex += 1;
+  );
+  
+  // Increment selection index
+  trackIndex += 1;
+);
